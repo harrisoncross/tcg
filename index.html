@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Richo's Pokémon Cards | Premium TCG Marketplace</title>
+  
+  <!-- Google Fonts & FontAwesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Firebase SDKs (v10.8.0 Compatibility Build) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --primary-gold: #ffcb05;
+      --primary-blue: #2a75bb;
+      --accent-red: #ff3e3e;
+      --accent-cyan: #00f0ff;
+      --bg-dark: #090a10;
+      --card-bg: rgba(22, 27, 46, 0.75);
+      --card-border: rgba(255, 203, 5, 0.2);
+      --glass-glow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+      --text-main: #f0f4f8;
+      --text-muted: #8a99ad;
+      --font-display: 'Orbitron', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(42, 117, 187, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(255, 62, 62, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(255, 203, 5, 0.05) 0%, transparent 60%);
+      background-attachment: fixed;
+    }
+
+    /* ==================== SPLASH SCREEN ==================== */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #050608;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.8s;
+    }
+
+    .pokeball-container {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Spinning Pokéball outer ring */
+    .pokeball {
+      width: 120px;
+      height: 120px;
+      background: linear-gradient(135deg, #ff1111 0%, #cc0000 45%, #111 48%, #111 52%, #ffffff 55%, #dedede 100%);
+      border-radius: 50%;
+      border: 6px solid #111;
+      position: relative;
+      box-shadow: 0 0 35px rgba(255, 62, 62, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.3);
+      animation: spinPokeball 2.2s ease-in-out infinite;
+    }
+
+    .pokeball::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 8px;
+      background: #111;
+      transform: translateY(-50%);
+    }
+
+    .pokeball-button {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 36px;
+      height: 36px;
+      background: #ffffff;
+      border: 5px solid #111;
+      border-radius: 50%;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+      animation: pulseButton 1.2s infinite alternate;
+    }
+
+    @keyframes spinPokeball {
+      0% { transform: rotate(0deg) scale(0.95); }
+      50% { transform: rotate(180deg) scale(1.05); }
+      100% { transform: rotate(360deg) scale(0.95); }
+    }
+
+    @keyframes pulseButton {
+      0% { background: #fff; box-shadow: 0 0 10px #00f0ff; }
+      100% { background: var(--primary-gold); box-shadow: 0 0 25px var(--primary-gold); }
+    }
+
+    .splash-title {
+      margin-top: 35px;
+      font-family: var(--font-display);
+      font-size: 22px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #fff, var(--primary-gold), #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+
+    .splash-loader {
+      margin-top: 15px;
+      width: 160px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .splash-loader-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary-blue), var(--primary-gold));
+      animation: loadProgress 2.2s forwards ease-in-out;
+    }
+
+    @keyframes loadProgress {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
+
+    /* ==================== APP CONTAINER ==================== */
+    #app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+      padding-bottom: 90px;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+
+    /* HEADER / NAVBAR */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: rgba(13, 17, 28, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 203, 5, 0.15);
+      border-radius: 20px;
+      position: sticky;
+      top: 12px;
+      z-index: 100;
+      box-shadow: var(--glass-glow);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #ff3e3e, #111 50%, #fff 51%);
+      border-radius: 50%;
+      border: 2px solid var(--primary-gold);
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 1px;
+    }
+
+    .brand-title span {
+      color: var(--primary-gold);
+    }
+
+    .cart-btn {
+      position: relative;
+      background: rgba(255, 203, 5, 0.1);
+      border: 1px solid var(--primary-gold);
+      color: var(--primary-gold);
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .cart-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: var(--accent-red);
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--bg-dark);
+    }
+
+    /* BANNER CAROUSEL */
+    .hero-banner {
+      margin-top: 20px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(42, 117, 187, 0.4), rgba(15, 23, 42, 0.8)), url('https://images.unsplash.com/photo-1613771404784-3a5686aa2be3?auto=format&fit=crop&w=1200&q=80') center/cover;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .hero-content {
+      max-width: 280px;
+      z-index: 2;
+    }
+
+    .hero-tag {
+      background: var(--accent-red);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+
+    .hero-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.2;
+    }
+
+    /* SEARCH & FILTER CONTROLS */
+    .search-filter-section {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .search-bar {
+      position: relative;
+      width: 100%;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 14px 16px 14px 44px;
+      background: rgba(18, 24, 38, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search-bar i {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+    }
+
+    .categories-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+
+    .categories-scroll::-webkit-scrollbar { display: none; }
+
+    .chip {
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .chip.active {
+      background: var(--primary-gold);
+      color: #000;
+      border-color: var(--primary-gold);
+    }
+
+    /* PRODUCT GRID */
+    .products-grid {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+    }
+
+    @media (min-width: 768px) {
+      .products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 20px;
+      }
+    }
+
+    .card-item {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card-item:active {
+      transform: scale(0.98);
+    }
+
+    .badge-grade {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid var(--primary-gold);
+      color: var(--primary-gold);
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 6px;
+      z-index: 2;
+    }
+
+    .card-img-wrap {
+      width: 100%;
+      aspect-ratio: 3/4;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0d1117;
+      margin-bottom: 10px;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .card-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.3;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .card-footer {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .price {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--primary-gold);
+    }
+
+    .add-btn {
+      background: var(--primary-blue);
+      color: #fff;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    /* 3D HOLO PREVIEW MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .holo-card-modal {
+      width: 100%;
+      max-width: 340px;
+      background: rgba(22, 27, 46, 0.95);
+      border: 1px solid var(--primary-gold);
+      border-radius: 24px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .close-modal {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .holo-stage {
+      perspective: 1000px;
+      width: 220px;
+      height: 308px;
+      margin: 16px 0;
+    }
+
+    .holo-card {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.1s ease-out;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
+      background-size: cover;
+    }
+
+    .holo-shine {
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.4) 48%, rgba(255, 0, 128, 0.3) 55%, transparent 80%);
+      mix-blend-mode: color-dodge;
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
+    /* CART DRAWER */
+    .cart-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      max-width: 400px;
+      background: #0d111a;
+      z-index: 2000;
+      transform: translateX(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .cart-drawer.open {
+      transform: translateX(0);
+    }
+
+    .cart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .cart-items {
+      flex: 1;
+      overflow-y: auto;
+      margin: 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .checkout-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--primary-gold);
+      color: #000;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 14px;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== SPLASH / LOADING SCREEN ==================== -->
+  <div id="splash-screen">
+    <div class="pokeball-container">
+      <div class="pokeball">
+        <div class="pokeball-button"></div>
+      </div>
+    </div>
+    <div class="splash-title">Richo's Cards</div>
+    <div class="splash-loader">
+      <div class="splash-loader-bar"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN SHOP APP ==================== -->
+  <div id="app">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon"></div>
+        <div class="brand-title">Richo's <span>TCG</span></div>
+      </div>
+      <button class="cart-btn" onclick="toggleCart(true)">
+        <i class="fa-solid fa-bag-shopping"></i>
+        <div class="cart-badge" id="cart-count">0</div>
+      </button>
+    </header>
+
+    <!-- Banner -->
+    <div class="hero-banner">
+      <div class="hero-content">
+        <span class="hero-tag">Featured Chase</span>
+        <div class="hero-title">Charizard 1st Ed. Base Set</div>
+      </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="search-filter-section">
+      <div class="search-bar">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="search-input" placeholder="Search cards, sets, or PSA grades..." onkeyup="filterProducts()">
+      </div>
+      <div class="categories-scroll">
+        <button class="chip active" onclick="setCategory('All', this)">All Items</button>
+        <button class="chip" onclick="setCategory('Singles', this)">Singles</button>
+        <button class="chip" onclick="setCategory('Graded', this)">Graded Slabs</button>
+        <button class="chip" onclick="setCategory('Sealed', this)">Sealed Boxes</button>
+      </div>
+    </div>
+
+    <!-- Products Grid -->
+    <div class="products-grid" id="products-container">
+      <!-- Dynamic Products Inserted Here -->
+    </div>
+  </div>
+
+  <!-- ==================== 3D HOLO MODAL ==================== -->
+  <div class="modal-overlay" id="holo-modal" onclick="closeModal(event)">
+    <div class="holo-card-modal" onclick="event.stopPropagation()">
+      <i class="fa-solid fa-xmark close-modal" onclick="closeModal(null, true)"></i>
+      <h3 id="modal-card-name" style="color: #fff; text-align: center;">Card Preview</h3>
+      
+      <div class="holo-stage">
+        <div class="holo-card" id="holo-card">
+          <div class="holo-shine"></div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; width: 100%; margin-top: 10px;">
+        <div>
+          <div style="font-size: 11px; color: var(--text-muted);" id="modal-card-set">Set Name</div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--primary-gold);" id="modal-card-price">$0.00</div>
+        </div>
+        <button class="checkout-btn" style="width: auto; padding: 10px 20px;" onclick="addCurrentToCart()">Add To Cart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CART DRAWER ==================== -->
+  <div class="cart-drawer" id="cart-drawer">
+    <div class="cart-header">
+      <h2 style="font-family: var(--font-display); font-size: 16px;">Your Cart</h2>
+      <i class="fa-solid fa-xmark" style="cursor: pointer;" onclick="toggleCart(false)"></i>
+    </div>
+    <div class="cart-items" id="cart-items-container">
+      <!-- Dynamic Cart Items -->
+    </div>
+    <div>
+      <div style="display: flex; justify-content: space-between; margin-bottom: 16px; font-weight: 700;">
+        <span>Total</span>
+        <span id="cart-total" style="color: var(--primary-gold);">$0.00 AUD</span>
+      </div>
+      <button class="checkout-btn" onclick="checkout()">Checkout via Stripe</button>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+  <script>
+    /* Optional Firebase Credentials Config */
+    const firebaseConfig = {
+      apiKey: "YOUR_FIREBASE_API_KEY",
+      authDomain: "richos-pokemon-cards.firebaseapp.com",
+      projectId: "richos-pokemon-cards",
+      storageBucket: "richos-pokemon-cards.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcdef"
+    };
+
+    // Initialize Mock Data
+    let products = [
+      {
+        id: "charizard-1",
+        name: "Charizard Holo 1st Edition",
+        set_name: "Base Set (4/102)",
+        price: 4500.00,
+        category: "Graded",
+        grade: "PSA 9",
+        image: "https://images.unsplash.com/photo-1613771404784-3a5686aa2be3?auto=format&fit=crop&w=600&q=80"
+      },
+      {
+        id: "gengar-alt",
+        name: "Gengar VMAX Alt Art",
+        set_name: "Fusion Strike",
+        price: 320.00,
+        category: "Singles",
+        grade: "RAW NM",
+        image: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80"
+      },
+      {
+        id: "151-booster",
+        name: "151 Booster Display Box",
+        set_name: "Scarlet & Violet",
+        price: 210.00,
+        category: "Sealed",
+        grade: "SEALED",
+        image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80"
+      }
+    ];
+
+    let cart = [];
+    let currentCategory = 'All';
+    let selectedHoloCard = null;
+
+    // Startup Screen Automation
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        const app = document.getElementById('app');
+        
+        splash.style.opacity = '0';
+        setTimeout(() => {
+          splash.style.visibility = 'hidden';
+          app.style.opacity = '1';
+        }, 800);
+      }, 2400);
+
+      renderProducts(products);
+      setupHoloTilt();
+    });
+
+    // Render Cards Grid
+    function renderProducts(items) {
+      const container = document.getElementById('products-container');
+      container.innerHTML = '';
+
+      items.forEach(item => {
+        const cardHtml = `
+          <div class="card-item">
+            <div class="badge-grade">${item.grade}</div>
+            <div class="card-img-wrap" onclick="openHoloModal('${item.id}')">
+              <img src="${item.image}" alt="${item.name}" loading="lazy">
+            </div>
+            <div class="card-title">${item.name}</div>
+            <div class="card-subtitle">${item.set_name}</div>
+            <div class="card-footer">
+              <div class="price">$${item.price.toLocaleString()}</div>
+              <button class="add-btn" onclick="addToCart('${item.id}')">
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        container.innerHTML += cardHtml;
+      });
+    }
+
+    // Filter Logic
+    function setCategory(category, el) {
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      currentCategory = category;
+      filterProducts();
+    }
+
+    function filterProducts() {
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const filtered = products.filter(p => {
+        const matchesCategory = (currentCategory === 'All') || (p.category === currentCategory);
+        const matchesQuery = p.name.toLowerCase().includes(query) || p.set_name.toLowerCase().includes(query);
+        return matchesCategory && matchesQuery;
+      });
+      renderProducts(filtered);
+    }
+
+    // 3D Tilt Modal Effect
+    function openHoloModal(id) {
+      selectedHoloCard = products.find(p => p.id === id);
+      if (!selectedHoloCard) return;
+
+      document.getElementById('modal-card-name').innerText = selectedHoloCard.name;
+      document.getElementById('modal-card-set').innerText = selectedHoloCard.set_name;
+      document.getElementById('modal-card-price').innerText = `$${selectedHoloCard.price.toLocaleString()}`;
+      
+      const holoCard = document.getElementById('holo-card');
+      holoCard.style.backgroundImage = `url('${selectedHoloCard.image}')`;
+
+      document.getElementById('holo-modal').classList.add('active');
+    }
+
+    function closeModal(e, force = false) {
+      if (force || e.target.id === 'holo-modal') {
+        document.getElementById('holo-modal').classList.remove('active');
+      }
+    }
+
+    function setupHoloTilt() {
+      const card = document.getElementById('holo-card');
+      const stage = document.querySelector('.holo-stage');
+
+      stage.addEventListener('mousemove', (e) => {
+        const rect = stage.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        const rotateX = ((y - centerY) / centerY) * -20;
+        const rotateY = ((x - centerX) / centerX) * 20;
+
+        card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+      });
+
+      stage.addEventListener('mouseleave', () => {
+        card.style.transform = `rotateX(0deg) rotateY(0deg)`;
+      });
+    }
+
+    // Shopping Cart Logic
+    function addToCart(id) {
+      const product = products.find(p => p.id === id);
+      if (product) {
+        cart.push(product);
+        updateCartUI();
+      }
+    }
+
+    function addCurrentToCart() {
+      if (selectedHoloCard) {
+        addToCart(selectedHoloCard.id);
+        closeModal(null, true);
+        toggleCart(true);
+      }
+    }
+
+    function updateCartUI() {
+      document.getElementById('cart-count').innerText = cart.length;
+      const cartContainer = document.getElementById('cart-items-container');
+      cartContainer.innerHTML = '';
+
+      let total = 0;
+      cart.forEach((item, index) => {
+        total += item.price;
+        cartContainer.innerHTML += `
+          <div style="display: flex; gap: 12px; align-items: center; background: rgba(255,255,255,0.03); padding: 8px; border-radius: 10px;">
+            <img src="${item.image}" style="width: 40px; height: 50px; object-fit: cover; border-radius: 6px;">
+            <div style="flex: 1;">
+              <div style="font-size: 12px; font-weight: 700;">${item.name}</div>
+              <div style="font-size: 11px; color: var(--primary-gold);">$${item.price.toLocaleString()}</div>
+            </div>
+            <i class="fa-solid fa-trash" style="color: var(--accent-red); cursor: pointer;" onclick="removeFromCart(${index})"></i>
+          </div>
+        `;
+      });
+
+      document.getElementById('cart-total').innerText = `$${total.toLocaleString()} AUD`;
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      updateCartUI();
+    }
+
+    function toggleCart(open) {
+      const drawer = document.getElementById('cart-drawer');
+      if (open) drawer.classList.add('open');
+      else drawer.classList.remove('open');
+    }
+
+    function checkout() {
+      if (cart.length === 0) return alert('Your cart is empty!');
+      alert('Redirecting to secure Stripe Checkout...');
+    }
+  </script>
+</body>
+</html>
